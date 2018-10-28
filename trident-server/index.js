@@ -45,7 +45,7 @@ port.on('data', function (data) {
       confirmPayment()
     })
     .catch(()=>{
-      console.log("payment confirmed")
+      console.error("payment not confirmed")
       confirmPayment()
     })
   }
