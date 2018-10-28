@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta name="description" content="fog chat" />
+  <meta charset="utf-8">
+  <title>Fog Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="shortcut icon" type="image/x-icon" href="data:image/x-icon;,">
+  <!-- Web Application Manifest -->
+  <link rel="manifest" href='data:application/manifest+json,{ "name": "Fog Chat", "short_name": "Fog Chat", "description": "Fog Chat", "background_color": "#00646e", "display": "standalone",
+  "theme_color": "#2E3AA1"}' />
+  <!-- Chrome for Android theme color -->
+  <meta name="theme-color" content="#00646e">
+  <!-- Tile color for Win8 -->
+  <meta name="msapplication-TileColor" content="#00646e">
+  <!-- Add to homescreen for Chrome on Android -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="Fog Chat">
+  <!--<link rel="icon" sizes="192x192" href="images/touch/chrome-touch-icon-192x192.png">-->
+  <!-- Add to homescreen for Safari on iOS -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="#00646e">
+  <meta name="apple-mobile-web-app-title" content="Fog Chat">
+  <!--<link rel="apple-touch-icon" href="images/touch/apple-touch-icon.png">-->
+</head>
+
+<body>
+<script>
+
+var WSURL = 'ws://216.216.216.216/ws'
+
+// wait for all scripts and libs to load
+window.onload = function(){
+const { Component, h, render } = window.preact;
+
+// create store and attach to localStorage
+var store = unistore({
+  id: 0,
+  messages: [] 
+})
+unissist(store, unissist.localStorageAdapter());
+
+// web crypto api?
+
+let actions = store => ({
+
+  sendMessage(state, ws, m) {
+    if(ws && ws.readyState > 0){
+      ws.send(JSON.stringify(m))
+    }
+    return { ...state, messages: [m, ...state.messages]}
+  },
+
+  receiveMessage(state, m) {
+    console.log('message received', m)
+    return { ...state, messages: [m, ...state.messages]}
+  },
+
+  clearMessages(state) {
+    return { ...state, messages: [] }
+  }
+
+})
+
+class App extends Component {
+
+  constructor(){
+    super()
+    this.ws = new ReconnectingWebSocket(WSURL)
+    // ws.refresh() to try again on a "connect" button?
+    this.ws.onmessage = function(e){
+      let d = null
+      try{d=JSON.parse(e.data)}catch(e){}
+      if(d) this.props.receiveMessage(d)
+    }
+    this.ws.onopen = function(e) {
+      console.log("CONNECTED!!!",e)
+    }
+    this.ws.onerror = function(e) {
+      console.log("ERROR:",e)
+      // RETRY HERE?
+    }
+    this.ws.onclose = function(e) {
+      console.log("close event:",e)
+    }
+  }
+
+  componentWillUnmount(){
+    localStorage.setItem('hi','hi')
+  }
+
+  render() {
+    const {messages, sendMessage, clearMessages} = this.props
+    return (
+      h('main', {id:'app'},
+        //h(Header),
+        h(Messages, {messages:messages}),
+        h(TextInput, {sendMessage:m => sendMessage(this.ws,m)}),
+        h('button',{
+          className:'clear-button',
+          onClick: () => {
+            console.log("CLEAR")
+            clearMessages()
+          }
+        })
+      )
+    )
+  }
+}
+
+/** Components can just be pure functions */
+const Header = (props) => {
+  return h('header', null,
+    h('h1', null, 'Fog Chat'),
+  );
+};
+
+class Messages extends Component {
+
+  render(){
+    const {messages} = this.props
+    const items = messages && messages.map(m=>(
+      h('div', {className:'message-wrap'},
+        h('div', {className:'message'}, 
+          h('div', {className:'message-text'}, m.text)
+        )
+      )
+    ))
+    return ('div', {className:'main'}, 
+      h('div', {className:'messages',id:'messages'}, items)
+    )
+  }
+}
+
+class TextInput extends Component {
+  constructor(){
+    super()
+    this.state={
+      text:'',
+    }
+  }
+  render(){
+    const {disabled, sendMessage} = this.props
+    const {text} = this.state
+    return (
+      h('div',{className:'wrap-text-input'},
+        h('input',{
+          className:'text-input',
+          value:text,
+          onChange: e => {
+            this.setState({text:e.target.value})
+          }
+        }),
+        h('button',{
+          className:'send-button',
+          onClick: () => {
+            if(text){
+              sendMessage({text:text})
+              this.setState({text:''})
+            }
+          }
+        },
+          h('svg',{className:'send-button-svg'},
+            h('path',{d:"M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"}
+            )
+          )
+        )
+      )
+    )
+  }
+}
+
+const Index = unistore.connect('messages,id', actions)(
+  (props) => (
+    h(App, props)
+  )
+)
+
+render((
+  h(unistore.Provider,{store:store},
+    h(Index)
+  )),
+document.body)
+
+} // end window.onload
+
+let unistore_example_actions = store => ({
+  // Actions can just return a state update:
+  increment(state) {
+    return { count: state.count+1 }
+  },
+
+  // The above example as an Arrow Function:
+  increment2: ({ count }) => ({ count: count+1 }),
+
+  //Actions receive current state as first parameter and any other params next
+  //check this function as <button onClick={incrementAndLog}>
+  incrementAndLog: ({ count }, event) => {
+    console.info(event)
+    return { count: count+1 }
+  },
+
+  // Async actions can be pure async/promise functions:
+  async getStuff(state) {
+    let res = await fetch('/foo.json')
+    return { stuff: await res.json() }
+  },
+
+  // ... or just actions that call store.setState() later:
+  incrementAsync(state) {
+    setTimeout( () => {
+      store.setState({ count: state.count+1 })
+    }, 100)
+  }
+})
+
+</script>
+
+<style>
+  *{
+    box-sizing: border-box;
+  }
+  button:focus {outline:0;}
+  button{cursor: pointer;}
+  input:focus {outline:0;}
+  html {
+    /*overflow: hidden;*/
+    position: fixed;
+    width:100%;
+    height:100%;
+    overflow: hidden;
+  }
+  body{
+    display: flex;
+    width:100%;
+    height: 100%;
+    flex-direction: column;
+    -webkit-box-pack: start;
+    justify-content: start;
+    min-height: 100vh;
+    background: linear-gradient(145deg, rgb(0, 100, 109) 42%, rgb(65, 28, 206)) 0% 0% / cover;
+    background-position: center center;
+    background-attachment: fixed;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; 
+    font-size: 15px; 
+    font-style: normal; 
+    font-variant: normal; 
+    font-weight: 300; 
+    line-height: 21px;
+    letter-spacing: 0.4px;
+    margin:0;
+    overflow: hidden;
+  }
+  header{
+    position: fixed;
+    width:100%;
+  }
+  h1{
+    background: rgba(50, 0, 150, 0.8);
+    color: white;
+    text-align: center;
+    padding: 18px;
+    border-top: 1px solid #afafaf;
+    border-bottom: 1px solid #afafaf;
+    transition: all 0.2s;
+    font-weight: 100;
+    cursor: pointer;
+  }
+  h1:hover{
+    background: rgba(255,255,255, 0.6);
+    color: rgb(50, 0, 150);
+    border-top: 2px solid rgb(50, 0, 150);
+    border-bottom: 2px solid rgb(50, 0, 150);
+  }
+  .main{
+    display: flex;
+    position: relative;
+    flex-direction: column;
+    -webkit-box-pack: start;
+    justify-content: start;
+  }
+  .messages{
+    width: 100%;
+    padding-bottom: 15px;
+    padding-top:10px;
+    position: absolute;
+    top: 1px;
+    bottom: 50px;
+    display: flex;
+    flex-direction: column-reverse;
+    overflow-y: scroll;
+  }
+  .message-wrap{
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    -webkit-box-align: center;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 5px 20px;
+  }
+  .message{
+    color: white;
+    display: flex;
+    font-size: 14px;
+    position: relative;
+    margin-left: 15px;
+    background: black;
+    border-radius: 10px;
+    flex: 1 1 0%;
+    padding: 7px 12px;
+    border: 1px solid #afafaf;
+    border-image: initial;
+  }
+  .message-text{
+    display: flex;
+    color: white;
+    position: relative;
+    flex: 1 1 0%;
+    font-size: 15px;
+    z-index: 1;
+  }
+  .message:before{
+    content: "";
+    width: 12px;
+    height: 12px;
+    transform: rotate(45deg);
+    position: absolute;
+    right: -6px;
+    top: 10px;
+    background: black;
+    border: 1px solid #afafaf;
+    border-image: initial;
+  }
+  .message:after{
+    content: "";
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    right: 0px;
+    bottom: 0px;
+    width: 100%;
+    height: 100%;
+    background: black;
+    border-radius: 10px;
+  }
+  .wrap-text-input{
+    width: 100%;
+    position: fixed;
+    height: 50px;
+    bottom: 0px;
+    border-top: 1px solid white;
+    background: rgba(255, 255, 255, 0.3);
+    z-index: 2;
+  }
+  .text-input{
+    position: relative;
+    color: white;
+    height: 31px;
+    padding:0 28px 2px 12px;
+    width: calc(100% - 17px);
+    font-size: 16px;
+    font-weight: 300;
+    letter-spacing: 0.25px;
+    border: 1px solid white;
+    border-image: initial;
+    border-radius: 14px;
+    margin: 9px;
+    background: rgb(31, 30, 46);
+    z-index: 2;
+  }
+  .send-button{
+    position: absolute;
+    right: 10px;
+    top: 11px;
+    width: 27px;
+    height: 27px;
+    opacity: 1;
+    border-radius: 100%;
+    border-width: 1px;
+    border-style: solid;
+    border-color: white;
+    border-image: initial;
+    background: white;
+    z-index: 3;
+  }
+  .clear-button{
+    position: fixed;
+    left: 10px;
+    top: 11px;
+    width: 27px;
+    height: 27px;
+    opacity: 1;
+    border-radius: 100%;
+    border-width: 1px;
+    border-style: solid;
+    border-color: white;
+    border-image: initial;
+    background: rgba(255,255,255,0.3);
+    z-index: 3;
+  }
+  .send-button-svg{
+    position: absolute;
+    height: 22px;
+    top: 1px;
+    left: 1px;
+    fill: black;
+  }
+</style>
+
+<script>
+  var favIcon = 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAT2SURBVHgBrVdJbFtVFD3v+3vKZDskKKSlCR3StJuoFWKDRFIFEAtWbFkkdMMkQdodmyapEGJVEZCqsoEEiT2RgFWakkStoCpNu4AGkramKAPNYDvf8/Ae933b/387346T9krP/n7vvnvPPXewDTyBzD0UH8/dF/OzS9lB7FMY9iFzi5k+ONRhCNFnMRTMpFNnzpzwBrEH2ROAa/PC7/BjmHExVNkgG8+kk6O1AqkZgKQbXIzQo383XckGF3z0laPqeA26uzi2obtWqSUtFQHUQnftQCqnxRbAXuiuHYR9WpRyxZEb4ho5/+JpOpcigE7GlG8/vSHmrftqueLUKvpCKYb+NoGAC09NHkSBq2sMD6Olgal2yr9vycXwahvwcquAx4F9SzJHQZHj6+v5z+U53wFACEwwhgH5PLVWBCJwuhl7FhnIj8tMB1GQMOcYs+rYFaHy4vfhTre7aZox1lHcPOkD3jxQW1pWEsBP5FjSbggXM8n09tlbb/uD8lNVAPLlpd/uBRrdXVczy0oPT5qH1dJSTrduzAO4DuYmp3rUtyw+c1UBvL6m9Tk93m/otIMnicIHDJkVU1WyUJ6WPyN5ukNpc891iIAeFmBOIdsgKDi/+HPANQ69KSoAeG0r/YtLdfTmdZheFFIkkNgtBVY2ZFokG7K6rXQ7AoD3OIejEfn7zHSjJRNjs882DFUEcGJxVTR6vQjU10F1OAwAeSMCaWIidb8UiGGMStrTxeFqF6b1wmOWqm89so1ENhO8d/S5F4p3bNtQSySQSKcJRD0avZ78ZgGIq50uBThSjxjSj0z8Bt2qBXAh+lA0hkg8TnUodoRcsQ2zuRzWt7cRisXQ3hyAqih5g7RkYXm7BNyHGBJ/K3A/z6EW60GYtpKZDB5T1DJ6Q7iYtPqzK0J2fGF5UGFsGIrZhrZpsRNCz8nhY01DPJmyBMbvCi7O/dV9cAY1tKGevQMr16ebYod7iwfSua/OS6tuJ4hCoUXiCZ01XoiaK2lE6pdm1tr6+2HyswsAbaQPXscFOu515hrQsnUK/mgXrEDa/E1wqU4UuyVJNbOpRZHKZg09re4f/PfMr8ioGqkoQaxr/Wj7PFgdgPbZGLy5j8q3fQSgNXQazmyDsdfo8cBHhRqlog1TkRUlo0ax0jqLuGe1pBP056RjAvWfDFYGsHSF5i0Z88fzNwWpMFEIlKEldEoHYoilzyXdm74/sOG/XXBsaUdOmQ1T6rbpR8mR96q3IUKkqLmhA2lIwRrGhn8ekYZFtIQpLVqX4TxG0a5S1Drd+gCDMTsQpbbZrM+D2K0NSYK0OpGlal+nUZZw5oGoxbQJneLVFknxGnzaMWwEbuvPRrhFvBmysUEpSzotjOGO1ZltG2Lh8iAc1IbFb0NJZXOikBaUTkdrfovjmzNJdZ5J03MYaZzFyfd/gGVaKLYAuj/4jhq5n4bGhOFIGvuXpk3UbbEpCrYsKOL0TbXsL3XOxZdYShwh55MoC7rqHNDfb17qQMA7DctvAzQk82yoOZMJPWXldIsZmkbn0XPuLkpmZG2DCCWXFi4P2KZFFqksWEk5N66FIZRRHHv3KyMQ05aVsor/C5jlrJQNv/cCjegBVJYxLMUv4o3zYZQ63uG8GgA7IKbcvNS5Iy2S7hwfRfeHs+VO7BzvVRTLchSWQml5B4tX7mDx6yFjz3wvrqryP84/PB3odky4AAAAAElFTkSuQmCC'
+  var docHead = document.getElementsByTagName('head')[0];       
+  var newLink = document.createElement('link');
+  newLink.rel = 'shortcut icon';
+  newLink.href = 'data:image/png;base64,'+favIcon;
+  docHead.appendChild(newLink);
+  var iconLink = document.createElement('link')
+  iconLink.rel = 'icon';
+  iconLink.href = 'data:image/png;base64,'+favIcon;
+  docHead.appendChild(iconLink);
+  var appleLink = document.createElement('link')
+  appleLink.rel = 'icon';
+  appleLink.href = 'data:image/png;base64,'+favIcon;
+  docHead.appendChild(appleLink);
+</script>
+
+<script>
+  //preact
+  !function(){"use strict";function e(e,t){var n,o,r,i,l=M;for(i=arguments.length;i-- >2;)T.push(arguments[i]);t&&null!=t.children&&(T.length||T.push(t.children),delete t.children);while(T.length)if((o=T.pop())&&void 0!==o.pop)for(i=o.length;i--;)T.push(o[i]);else"boolean"==typeof o&&(o=null),(r="function"!=typeof e)&&(null==o?o="":"number"==typeof o?o+="":"string"!=typeof o&&(r=!1)),r&&n?l[l.length-1]+=o:l===M?l=[o]:l.push(o),n=r;var a=new S;return a.nodeName=e,a.children=l,a.attributes=null==t?void 0:t,a.key=null==t?void 0:t.key,void 0!==L.vnode&&L.vnode(a),a}function t(e,t){for(var n in t)e[n]=t[n];return e}function n(n,o){return e(n.nodeName,t(t({},n.attributes),o),arguments.length>2?[].slice.call(arguments,2):n.children)}function o(e){!e.__d&&(e.__d=!0)&&1==D.push(e)&&(L.debounceRendering||P)(r)}function r(){var e,t=D;D=[];while(e=t.pop())e.__d&&C(e)}function i(e,t,n){return"string"==typeof t||"number"==typeof t?void 0!==e.splitText:"string"==typeof t.nodeName?!e._componentConstructor&&l(e,t.nodeName):n||e._componentConstructor===t.nodeName}function l(e,t){return e.__n===t||e.nodeName.toLowerCase()===t.toLowerCase()}function a(e){var n=t({},e.attributes);n.children=e.children;var o=e.nodeName.defaultProps;if(void 0!==o)for(var r in o)void 0===n[r]&&(n[r]=o[r]);return n}function p(e,t){var n=t?document.createElementNS("http://www.w3.org/2000/svg",e):document.createElement(e);return n.__n=e,n}function s(e){var t=e.parentNode;t&&t.removeChild(e)}function u(e,t,n,o,r){if("className"===t&&(t="class"),"key"===t);else if("ref"===t)n&&n(null),o&&o(e);else if("class"!==t||r)if("style"===t){if(o&&"string"!=typeof o&&"string"!=typeof n||(e.style.cssText=o||""),o&&"object"==typeof o){if("string"!=typeof n)for(var i in n)i in o||(e.style[i]="");for(var i in o)e.style[i]="number"==typeof o[i]&&!1===W.test(i)?o[i]+"px":o[i]}}else if("dangerouslySetInnerHTML"===t)o&&(e.innerHTML=o.__html||"");else if("o"==t[0]&&"n"==t[1]){var l=t!==(t=t.replace(/Capture$/,""));t=t.toLowerCase().substring(2),o?n||e.addEventListener(t,c,l):e.removeEventListener(t,c,l),(e.__l||(e.__l={}))[t]=o}else if("list"!==t&&"type"!==t&&!r&&t in e){try{e[t]=null==o?"":o}catch(e){}null!=o&&!1!==o||"spellcheck"==t||e.removeAttribute(t)}else{var a=r&&t!==(t=t.replace(/^xlink:?/,""));null==o||!1===o?a?e.removeAttributeNS("http://www.w3.org/1999/xlink",t.toLowerCase()):e.removeAttribute(t):"function"!=typeof o&&(a?e.setAttributeNS("http://www.w3.org/1999/xlink",t.toLowerCase(),o):e.setAttribute(t,o))}else e.className=o||""}function c(e){return this.__l[e.type](L.event&&L.event(e)||e)}function _(){var e;while(e=E.pop())L.afterMount&&L.afterMount(e),e.componentDidMount&&e.componentDidMount()}function d(e,t,n,o,r,i){V++||(A=null!=r&&void 0!==r.ownerSVGElement,H=null!=e&&!("__preactattr_"in e));var l=f(e,t,n,o,i);return r&&l.parentNode!==r&&r.appendChild(l),--V||(H=!1,i||_()),l}function f(e,t,n,o,r){var i=e,a=A;if(null!=t&&"boolean"!=typeof t||(t=""),"string"==typeof t||"number"==typeof t)return e&&void 0!==e.splitText&&e.parentNode&&(!e._component||r)?e.nodeValue!=t&&(e.nodeValue=t):(i=document.createTextNode(t),e&&(e.parentNode&&e.parentNode.replaceChild(i,e),m(e,!0))),i.__preactattr_=!0,i;var s=t.nodeName;if("function"==typeof s)return x(e,t,n,o);if(A="svg"===s||"foreignObject"!==s&&A,s+="",(!e||!l(e,s))&&(i=p(s,A),e)){while(e.firstChild)i.appendChild(e.firstChild);e.parentNode&&e.parentNode.replaceChild(i,e),m(e,!0)}var u=i.firstChild,c=i.__preactattr_,_=t.children;if(null==c){c=i.__preactattr_={};for(var d=i.attributes,f=d.length;f--;)c[d[f].name]=d[f].value}return!H&&_&&1===_.length&&"string"==typeof _[0]&&null!=u&&void 0!==u.splitText&&null==u.nextSibling?u.nodeValue!=_[0]&&(u.nodeValue=_[0]):(_&&_.length||null!=u)&&h(i,_,n,o,H||null!=c.dangerouslySetInnerHTML),b(i,t.attributes,c),A=a,i}function h(e,t,n,o,r){var l,a,p,u,c,_=e.childNodes,d=[],h={},v=0,b=0,y=_.length,g=0,w=t?t.length:0;if(0!==y)for(var C=0;C<y;C++){var x=_[C],N=x.__preactattr_,k=w&&N?x._component?x._component.__k:N.key:null;null!=k?(v++,h[k]=x):(N||(void 0!==x.splitText?!r||x.nodeValue.trim():r))&&(d[g++]=x)}if(0!==w)for(var C=0;C<w;C++){u=t[C],c=null;var k=u.key;if(null!=k)v&&void 0!==h[k]&&(c=h[k],h[k]=void 0,v--);else if(b<g)for(l=b;l<g;l++)if(void 0!==d[l]&&i(a=d[l],u,r)){c=a,d[l]=void 0,l===g-1&&g--,l===b&&b++;break}c=f(c,u,n,o),p=_[C],c&&c!==e&&c!==p&&(null==p?e.appendChild(c):c===p.nextSibling?s(p):e.insertBefore(c,p))}if(v)for(var C in h)void 0!==h[C]&&m(h[C],!1);while(b<=g)void 0!==(c=d[g--])&&m(c,!1)}function m(e,t){var n=e._component;n?N(n):(null!=e.__preactattr_&&e.__preactattr_.ref&&e.__preactattr_.ref(null),!1!==t&&null!=e.__preactattr_||s(e),v(e))}function v(e){e=e.lastChild;while(e){var t=e.previousSibling;m(e,!0),e=t}}function b(e,t,n){var o;for(o in n)t&&null!=t[o]||null==n[o]||u(e,o,n[o],n[o]=void 0,A);for(o in t)"children"===o||"innerHTML"===o||o in n&&t[o]===("value"===o||"checked"===o?e[o]:n[o])||u(e,o,n[o],n[o]=t[o],A)}function y(e,t,n){var o,r=B.length;e.prototype&&e.prototype.render?(o=new e(t,n),k.call(o,t,n)):(o=new k(t,n),o.constructor=e,o.render=g);while(r--)if(B[r].constructor===e)return o.__b=B[r].__b,B.splice(r,1),o;return o}function g(e,t,n){return this.constructor(e,n)}function w(e,t,n,r,i){e.__x||(e.__x=!0,e.__r=t.ref,e.__k=t.key,delete t.ref,delete t.key,void 0===e.constructor.getDerivedStateFromProps&&(!e.base||i?e.componentWillMount&&e.componentWillMount():e.componentWillReceiveProps&&e.componentWillReceiveProps(t,r)),r&&r!==e.context&&(e.__c||(e.__c=e.context),e.context=r),e.__p||(e.__p=e.props),e.props=t,e.__x=!1,0!==n&&(1!==n&&!1===L.syncComponentUpdates&&e.base?o(e):C(e,1,i)),e.__r&&e.__r(e))}function C(e,n,o,r){if(!e.__x){var i,l,p,s=e.props,u=e.state,c=e.context,f=e.__p||s,h=e.__s||u,v=e.__c||c,b=e.base,g=e.__b,x=b||g,k=e._component,U=!1,S=v;if(e.constructor.getDerivedStateFromProps&&(u=t(t({},u),e.constructor.getDerivedStateFromProps(s,u)),e.state=u),b&&(e.props=f,e.state=h,e.context=v,2!==n&&e.shouldComponentUpdate&&!1===e.shouldComponentUpdate(s,u,c)?U=!0:e.componentWillUpdate&&e.componentWillUpdate(s,u,c),e.props=s,e.state=u,e.context=c),e.__p=e.__s=e.__c=e.__b=null,e.__d=!1,!U){i=e.render(s,u,c),e.getChildContext&&(c=t(t({},c),e.getChildContext())),b&&e.getSnapshotBeforeUpdate&&(S=e.getSnapshotBeforeUpdate(f,h));var T,M,P=i&&i.nodeName;if("function"==typeof P){var W=a(i);l=k,l&&l.constructor===P&&W.key==l.__k?w(l,W,1,c,!1):(T=l,e._component=l=y(P,W,c),l.__b=l.__b||g,l.__u=e,w(l,W,0,c,!1),C(l,1,o,!0)),M=l.base}else p=x,T=k,T&&(p=e._component=null),(x||1===n)&&(p&&(p._component=null),M=d(p,i,c,o||!b,x&&x.parentNode,!0));if(x&&M!==x&&l!==k){var D=x.parentNode;D&&M!==D&&(D.replaceChild(M,x),T||(x._component=null,m(x,!1)))}if(T&&N(T),e.base=M,M&&!r){var A=e,H=e;while(H=H.__u)(A=H).base=M;M._component=A,M._componentConstructor=A.constructor}}!b||o?E.unshift(e):U||(e.componentDidUpdate&&e.componentDidUpdate(f,h,S),L.afterUpdate&&L.afterUpdate(e));while(e.__h.length)e.__h.pop().call(e);V||r||_()}}function x(e,t,n,o){var r=e&&e._component,i=r,l=e,p=r&&e._componentConstructor===t.nodeName,s=p,u=a(t);while(r&&!s&&(r=r.__u))s=r.constructor===t.nodeName;return r&&s&&(!o||r._component)?(w(r,u,3,n,o),e=r.base):(i&&!p&&(N(i),e=l=null),r=y(t.nodeName,u,n),e&&!r.__b&&(r.__b=e,l=null),w(r,u,1,n,o),e=r.base,l&&e!==l&&(l._component=null,m(l,!1))),e}function N(e){L.beforeUnmount&&L.beforeUnmount(e);var t=e.base;e.__x=!0,e.componentWillUnmount&&e.componentWillUnmount(),e.base=null;var n=e._component;n?N(n):t&&(t.__preactattr_&&t.__preactattr_.ref&&t.__preactattr_.ref(null),e.__b=t,s(t),B.push(e),v(t)),e.__r&&e.__r(null)}function k(e,t){this.__d=!0,this.context=t,this.props=e,this.state=this.state||{},this.__h=[]}function U(e,t,n){return d(n,e,{},!1,t,!1)}var S=function(){},L={},T=[],M=[],P="function"==typeof Promise?Promise.resolve().then.bind(Promise.resolve()):setTimeout,W=/acit|ex(?:s|g|n|p|$)|rph|ows|mnc|ntw|ine[ch]|zoo|^ord/i,D=[],E=[],V=0,A=!1,H=!1,B=[];t(k.prototype,{setState:function(e,n){this.__s||(this.__s=this.state),this.state=t(t({},this.state),"function"==typeof e?e(this.state,this.props):e),n&&this.__h.push(n),o(this)},forceUpdate:function(e){e&&this.__h.push(e),C(this,2)},render:function(){}});var F={h:e,createElement:e,cloneElement:n,Component:k,render:U,rerender:r,options:L};"undefined"!=typeof module?module.exports=F:self.preact=F}();
+  //unistore
+  !function(n,t){n.unistore=t()}(this,function(){function n(n,t){for(var e in t)n[e]=t[e];return n}return function(t){var e=[];function u(n){for(var t=[],u=0;u<e.length;u++)e[u]===n?n=null:t.push(e[u]);e=t}function r(u,r,o){t=r?u:n(n({},t),u);for(var i=e,f=0;f<i.length;f++)i[f](t,o)}return t=t||{},{action:function(n){function e(t){r(t,!1,n)}return function(){for(var u=arguments,r=[t],o=0;o<arguments.length;o++)r.push(u[o]);var i=n.apply(this,r);if(null!=i)return i.then?i.then(e):e(i)}},setState:r,subscribe:function(n){return e.push(n),function(){u(n)}},unsubscribe:u,getState:function(){return t}}}});
+  // unistore preact
+  var t=window.preact;function n(t,n){"function"==typeof t&&(t=t(n));var r={};for(var e in t)r[e]=n.action(t[e]);return r}function r(t){return"string"==typeof t&&(t=t.split(/\s*,\s*/)),function(n){for(var r={},e=0;e<t.length;e++)r[t[e]]=n[t[e]];return r}}function e(t,n){for(var r in n)t[r]=n[r];return t}function o(o,i){return"function"!=typeof o&&(o=r(o||[])),function(r){function u(u,c){var f=this,s=c.store,p=o(s?s.getState():{},u),a=i?n(i,s):{store:s},l=function(){var t=o(s?s.getState():{},f.props);for(var n in t)if(t[n]!==p[n])return p=t,f.setState(null);for(var r in p)if(!(r in t))return p=t,f.setState(null)};this.componentDidMount=function(){l(),s.subscribe(l)},this.componentWillUnmount=function(){s.unsubscribe(l)},this.render=function(n){return t.h(r,e(e(e({},a),n),p))}}return(u.prototype=new t.Component).constructor=u}}function i(t){this.getChildContext=function(){return{store:t.store}}}i.prototype.render=function(t){return t.children[0]},window.unistore.connect=o,window.unistore.Provider=i;
+  // reconnecting websocket
+  !function(a,b){a.ReconnectingWebSocket=b()}(this,function(){function a(b,c,d){function l(a,b){var c=document.createEvent("CustomEvent");return c.initCustomEvent(a,!1,!1,b),c}var e={debug:!1,automaticOpen:!0,reconnectInterval:1e3,maxReconnectInterval:3e4,reconnectDecay:1.5,timeoutInterval:2e3};d||(d={});for(var f in e)this[f]="undefined"!=typeof d[f]?d[f]:e[f];this.url=b,this.reconnectAttempts=0,this.readyState=WebSocket.CONNECTING,this.protocol=null;var h,g=this,i=!1,j=!1,k=document.createElement("div");k.addEventListener("open",function(a){g.onopen(a)}),k.addEventListener("close",function(a){g.onclose(a)}),k.addEventListener("connecting",function(a){g.onconnecting(a)}),k.addEventListener("message",function(a){g.onmessage(a)}),k.addEventListener("error",function(a){g.onerror(a)}),this.addEventListener=k.addEventListener.bind(k),this.removeEventListener=k.removeEventListener.bind(k),this.dispatchEvent=k.dispatchEvent.bind(k),this.open=function(b){h=new WebSocket(g.url,c||[]),b||k.dispatchEvent(l("connecting")),(g.debug||a.debugAll)&&console.debug("ReconnectingWebSocket","attempt-connect",g.url);var d=h,e=setTimeout(function(){(g.debug||a.debugAll)&&console.debug("ReconnectingWebSocket","connection-timeout",g.url),j=!0,d.close(),j=!1},g.timeoutInterval);h.onopen=function(){clearTimeout(e),(g.debug||a.debugAll)&&console.debug("ReconnectingWebSocket","onopen",g.url),g.protocol=h.protocol,g.readyState=WebSocket.OPEN,g.reconnectAttempts=0;var d=l("open");d.isReconnect=b,b=!1,k.dispatchEvent(d)},h.onclose=function(c){if(clearTimeout(e),h=null,i)g.readyState=WebSocket.CLOSED,k.dispatchEvent(l("close"));else{g.readyState=WebSocket.CONNECTING;var d=l("connecting");d.code=c.code,d.reason=c.reason,d.wasClean=c.wasClean,k.dispatchEvent(d),b||j||((g.debug||a.debugAll)&&console.debug("ReconnectingWebSocket","onclose",g.url),k.dispatchEvent(l("close")));var e=g.reconnectInterval*Math.pow(g.reconnectDecay,g.reconnectAttempts);setTimeout(function(){g.reconnectAttempts++,g.open(!0)},e>g.maxReconnectInterval?g.maxReconnectInterval:e)}},h.onmessage=function(b){(g.debug||a.debugAll)&&console.debug("ReconnectingWebSocket","onmessage",g.url,b.data);var c=l("message");c.data=b.data,k.dispatchEvent(c)},h.onerror=function(b){(g.debug||a.debugAll)&&console.debug("ReconnectingWebSocket","onerror",g.url,b),k.dispatchEvent(l("error"))}},1==this.automaticOpen&&this.open(!1),this.send=function(b){if(h)return(g.debug||a.debugAll)&&console.debug("ReconnectingWebSocket","send",g.url,b),h.send(b);throw"INVALID_STATE_ERR : Pausing to reconnect websocket"},this.close=function(a,b){"undefined"==typeof a&&(a=1e3),i=!0,h&&h.close(a,b)},this.refresh=function(){h&&h.close()}}return a.prototype.onopen=function(){},a.prototype.onclose=function(){},a.prototype.onconnecting=function(){},a.prototype.onmessage=function(){},a.prototype.onerror=function(){},a.debugAll=!1,a.CONNECTING=WebSocket.CONNECTING,a.OPEN=WebSocket.OPEN,a.CLOSING=WebSocket.CLOSING,a.CLOSED=WebSocket.CLOSED,a});
+// unissist
+!function(e,t){e.unissist=t()}(this,function(){return function(e,t,n){var i=(n=n||{}).version||1;e.setState({hydrated:!1}),Promise.resolve(t.getState()).then(function(t){!t||!t.version&&n.migration||t.version<i?n.migration?Promise.resolve(n.migration(t,i)).then(function(t){e.setState(Object.assign({},t,{hydrated:!0}))}):e.setState({hydrated:!0,version:i}):n.hydration?e.setState(Object.assign({},n.hydration(t),{hydrated:!0})):(t.hydrated=!0,e.setState(t))});var o,r=e.subscribe(function(){o||(o=setTimeout(function(){var r=e.getState();r.version=r.version||i,t.setState((n.map||Object)(r)),o=null},n.debounceTime||333))});return function(){r(),clearTimeout(o)}}});
+// unissist localStorageAdapter
+window.unissist.localStorageAdapter = function(t){
+  return t=t||"unistorePersist",{
+    getState:function(){
+      var e;
+      try{e=JSON.parse(localStorage.getItem(t))}catch(t){}
+      if(null!==e)return e
+    },
+    setState:function(e){
+      try{localStorage.setItem(t,JSON.stringify(e))}catch(t){}
+    },
+    clearState:function(){try{localStorage.removeItem(t)}catch(t){}}
+  }
+}
+</script>
+</body>
+</html>
