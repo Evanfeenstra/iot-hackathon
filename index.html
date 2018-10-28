@@ -32,8 +32,36 @@ var WSURL = 'ws://216.216.216.216/ws'
 
 var SEED = 'WOZLIQRKBS9MSWABVUSGBGSUFPQMWLSLCEPELZIOPNAFHHSSGDWPTTY9UIWS9AMARVHI9ACXVYDSZFTGZ'
 
+
 var server_seed = 'GXBRHLZUTMQXLUCGGAHPFXQSGMKRNE9TLIHUVJYYPCIILHPH9SENURHRHW9OQNCSDDVZJNQUDQNQZDXKN'
 var server_addy = 'GREKRLDLCIPAOVKGZYJCLEXMEMND9DLLWEPZBKBHVKVAQVOCFEGRDSTNGIKUPSIWEVGSXEOIHGKQWX9DDESIDNQLR9'
+/*
+iota.api.getNewAddress(SEED, {
+  index: 0, 
+  checksum: true, 
+  total: 1, 
+  security: 2,
+  returnAll: true
+}, (e, r) => {
+  if(e) console.error(e)
+  console.log(r)
+})
+*/
+
+// function messageTrytesFromSignatureMessageFragment(m){
+//   var index = 0;
+//   var howManyNines=0
+//   for (var i=0; i<m.length-1; i++){
+//     if(m[i]=='9'){
+//       howManyNines++
+//     }
+//     if(howManyNines>10){
+//       index = i
+//       break;
+//     }
+//   }
+//   return m.substr(0,index-10)
+// }
 
 // wait for all scripts and libs to load
 window.onload = function(){
@@ -53,34 +81,42 @@ unissist(store, unissist.localStorageAdapter());
 let actions = store => ({
 
   connect(state, ws) {
-
+    console.log('REQUEST')
+    if(ws && ws.readyState > 0){
+      ws.send(JSON.stringify({
+        type:'REQUEST'
+      }))
+    } else console.log("no websocket connection")
   },
 
   sendMessage(state, ws, m) {
-    console.log("MASSAGE",m)
-    //if(ws && ws.readyState > 0){
+    console.log("MESSAGE",m)
+    if(ws && ws.readyState > 0){
       const message = iota.utils.toTrytes(m.text)
       const transfers = [{
         value: 1,
-        address: state.address || server_addy,
+        address: state.payoutAddress || server_addy,
         message: message
       }]
       iota.api.prepareTransfers(SEED, transfers, (e, r) => {
-        if (e !== null) reject(e)
-        console.log(r)
+        if (e !== null) console.error(e)
         ws.send(JSON.stringify({
           type:'MESSAGE',
+          text: m.text,
           payload:r
         }))
         return { ...state, messages: [m, ...state.messages]}
       })
-    //}
-    
+    } else console.log("no websocket connection")
   },
 
   receiveMessage(state, m) {
     console.log('message received', m)
-    return { ...state, messages: [m, ...state.messages]}
+    if(m.type==='MESSAGE'){
+      return { ...state, messages: [m, ...state.messages]}
+    } else if(type==='ADDRESS'){
+      return { ...state, payoutAddress: m.address}
+    }  
   },
 
   clearMessages(state) {
@@ -101,14 +137,14 @@ class App extends Component {
       if(d) this.props.receiveMessage(d)
     }
     this.ws.onopen = function(e) {
-      console.log("CONNECTED!!!",e)
+      console.log("WEBSOCKET CONNECTED!!!",e)
     }
     this.ws.onerror = function(e) {
-      console.log("ERROR:",e)
+      console.log("WEBSOCKET ERROR:",e)
       // RETRY HERE?
     }
     this.ws.onclose = function(e) {
-      console.log("close event:",e)
+      console.log("WEBSOCKET close event:",e)
     }
   }
 
@@ -117,7 +153,17 @@ class App extends Component {
   }
 
   render() {
-    const {messages, sendMessage, clearMessages} = this.props
+    const {messages, sendMessage, clearMessages, connect, payoutAddress} = this.props
+    if(!payoutAddress){
+      return (
+        h('main', {id:'app'},
+          h('button', {
+            className:'connect-button',
+            onClick: () => connect() 
+          }, 'Connect')
+        )
+      )
+    }
     return (
       h('main', {id:'app'},
         //h(Header),
@@ -198,7 +244,7 @@ class TextInput extends Component {
 }
 
 // connect actions and store to App
-const Index = unistore.connect('messages,address', actions)(
+const Index = unistore.connect('messages,payoutAddress', actions)(
   (props) => (
     h(App, props)
   )
@@ -213,6 +259,8 @@ document.body)
 /*
 replaced (!h) with (true&&true&&true) in iota.lib.js
 to not check for balance before creating transfer
+
+https://iota.felixseele.de/ to decode tx trytes
 */
 
 } // end window.onload
@@ -386,6 +434,22 @@ to not check for balance before creating transfer
     border-image: initial;
     background: white;
     z-index: 3;
+  }
+  .connect-button{
+    position: fixed;
+    left: calc(50% - 39px);
+    top: calc(50% - 28px);
+    width: 78px;
+    height: 56px;
+    opacity: 1;
+    border-radius: 10px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: white;
+    border-image: initial;
+    background: rgba(255,255,255,0.3);
+    z-index: 3;
+    color:white;
   }
   .clear-button{
     position: fixed;
