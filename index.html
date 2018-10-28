@@ -35,18 +35,30 @@ var SEED = 'WOZLIQRKBS9MSWABVUSGBGSUFPQMWLSLCEPELZIOPNAFHHSSGDWPTTY9UIWS9AMARVHI
 
 var server_seed = 'GXBRHLZUTMQXLUCGGAHPFXQSGMKRNE9TLIHUVJYYPCIILHPH9SENURHRHW9OQNCSDDVZJNQUDQNQZDXKN'
 var server_addy = 'GREKRLDLCIPAOVKGZYJCLEXMEMND9DLLWEPZBKBHVKVAQVOCFEGRDSTNGIKUPSIWEVGSXEOIHGKQWX9DDESIDNQLR9'
-/*
-iota.api.getNewAddress(SEED, {
-  index: 0, 
-  checksum: true, 
-  total: 1, 
-  security: 2,
-  returnAll: true
-}, (e, r) => {
-  if(e) console.error(e)
-  console.log(r)
-})
-*/
+
+function getFirstAddress(iota,seed) {
+  return new Promise(function (resolve, reject) {
+    iota.api.getNewAddress(seed, {
+      index: 0, 
+      checksum: true, 
+      total: 1, 
+      security: 2,
+      returnAll: true
+    }, function(e, r) {
+      if (e !== null) reject(e)
+      else resolve(r)
+    })
+  })
+}
+
+function sendTrytes(iota, trytesArray) {
+  return new Promise(function (resolve, reject) {
+    iota.api.sendTrytes(trytesArray, 5, 14, function(e, r) {
+      if (e !== null) reject(e)
+      else resolve(r)
+    })
+  })
+}
 
 // function messageTrytesFromSignatureMessageFragment(m){
 //   var index = 0;
@@ -82,6 +94,9 @@ let actions = store => ({
 
   connect(state, ws) {
     console.log('REQUEST')
+
+    //getFirstAddress(iota,SEED).then(a=>console.log(a[0]))
+
     if(ws && ws.readyState > 0){
       ws.send(JSON.stringify({
         type:'REQUEST'
@@ -148,12 +163,12 @@ class App extends Component {
     }
   }
 
-  componentWillUnmount(){
-    localStorage.setItem('hi','hi')
-  }
+  // componentWillUnmount(){
+  //   localStorage.setItem('hi','hi')
+  // }
 
   render() {
-    const {messages, sendMessage, clearMessages, connect, payoutAddress} = this.props
+    const {messages, payoutAddress, sendMessage, clearMessages, connect} = this.props
     if(!payoutAddress){
       return (
         h('main', {id:'app'},
