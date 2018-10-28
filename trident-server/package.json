@@ -1,0 +1,10 @@
+{
+	"main": "index.js",
+	"dependencies": {
+		"axios": "^0.18.0",
+		"iota.lib.js": "^0.5.1",
+		"serialport": "^7.0.2",
+		"string_decoder": "^1.1.1",
+		"ws": "^6.1.0"
+	}
+}

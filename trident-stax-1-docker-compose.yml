@@ -1,0 +1,88 @@
+
+version: '3.4'
+
+networks:
+  trident-stax-1-iota-net:
+    external:
+      name: trident-stax-1-iota
+
+
+volumes:
+  trident-stax-1-iota:
+    external:
+      name: trident-stax-1-iota_node
+
+
+services:
+  trident-stax-1-gateway:
+    image: ${REGISTRY_URL}/stax/node-gateway:0.6-release
+    container_name: trident-stax-1-mesh-node-gateway
+    restart: unless-stopped
+    networks:
+      - trident-stax-1-iota-net
+
+
+    ports:
+      - ${GATEWAY_PORT}:9191
+    environment:
+      GATEWAY_PORT:
+      SPRING_RABBITMQ_HOST:
+      SPRING_RABBITMQ_PORT:
+      SPRING_RABBITMQ_USERNAME:
+      SPRING_RABBITMQ_PASSWORD:
+      SPRING_CLOUD_CLIENT_IPADDRESS:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:
+      REFERENCE_NAMESPACE: trident
+      REFERENCE_PROJECT: Stax_1
+
+      GATEWAY_BUSINESSFUNCTION_PAYMENT_SERVICEID: iota-adapter
+
+    entrypoint:
+      - java
+      - -jar
+      - /usr/src/app.jar
+      - --spring.profiles.active=prod
+  trident-stax-1-iotanode:
+    image: ${REGISTRY_URL}/stax/iota/payment-node:0.6-release
+    container_name: trident-stax-1-iota-node
+    restart: unless-stopped
+    networks:
+      - trident-stax-1-iota-net
+    volumes:
+      - type: volume
+        source: trident-stax-1-iota
+        target: /iri
+    ports:
+      - ${IOTA_NODE_API_PORT}:14265
+      - ${IOTA_NODE_UDP_PORT}:14777/udp
+      - ${IOTA_NODE_TCP_PORT}:15777
+
+  trident-stax-1-iotaadapter:
+    image: ${REGISTRY_URL}/stax/iota/adapter:0.6-release
+    container_name: trident-stax-1-iota-adapter
+    restart: unless-stopped
+    entrypoint:
+      - java
+      - -jar
+      - /usr/src/app.jar
+      - --spring.profiles.active=prod
+      - --eureka-server.uri=http://trident-stax-1-mesh-node-gateway:9191/eureka/
+      - --iota.node.hostname=${SPRING_CLOUD_CLIENT_IPADDRESS}
+      - --iota.node.port=${IOTA_NODE_API_PORT}
+      - --iota.node.api-port=${IOTA_NODE_API_PORT}
+      - --iota.node.udp-port=${IOTA_NODE_UDP_PORT}
+      - --iota.node.tcp-port=${IOTA_NODE_TCP_PORT}
+    networks:
+      - trident-stax-1-iota-net
+  trident-stax-1-coordinator:
+    image: ${REGISTRY_URL}/stax/iota/payment-coordinator:0.6-release
+    container_name: trident-stax-1-iota-coordinator
+    restart: unless-stopped
+    entrypoint:
+      - /bin/sh
+      - -c
+      - while true ; do java -cp ./iota-testnet-tools-0.1-SNAPSHOT-jar-with-dependencies.jar iotatools.SignedCoordinator trident-stax-1-iota-node 14265; sleep 60; done
+    networks:
+      - trident-stax-1-iota-net
+
+

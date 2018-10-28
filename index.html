@@ -30,8 +30,9 @@
 
 var WSURL = 'ws://216.216.216.216/ws'
 
-var SEED = 'WOZLIQRKBS9MSWABVUSGBGSUFPQMWLSLCEPELZIOPNAFHHSSGDWPTTY9UIWS9AMARVHI9ACXVYDSZFTGZ'
+//var SEED = 'WOZLIQRKBS9MSWABVUSGBGSUFPQMWLSLCEPELZIOPNAFHHSSGDWPTTY9UIWS9AMARVHI9ACXVYDSZFTGZ'
 
+var SEED = 'KLCTTSWE9EJPL9ZAVXAPBYW9SQSHMMTIKIWGZCG9SE9ITWXKAZLAVV9GZKZZLGI9DVOMCHNWC9XDTXZKN'
 
 var server_seed = 'GXBRHLZUTMQXLUCGGAHPFXQSGMKRNE9TLIHUVJYYPCIILHPH9SENURHRHW9OQNCSDDVZJNQUDQNQZDXKN'
 var server_addy = 'GREKRLDLCIPAOVKGZYJCLEXMEMND9DLLWEPZBKBHVKVAQVOCFEGRDSTNGIKUPSIWEVGSXEOIHGKQWX9DDESIDNQLR9'
@@ -93,35 +94,40 @@ unissist(store, unissist.localStorageAdapter());
 let actions = store => ({
 
   connect(state, ws) {
-    console.log('REQUEST')
-
-    //getFirstAddress(iota,SEED).then(a=>console.log(a[0]))
+    console.log('REQUEST',ws)
 
     if(ws && ws.readyState > 0){
-      ws.send(JSON.stringify({
-        type:'REQUEST'
-      }))
+      getFirstAddress(iota,SEED).then(a=>{
+        ws.send(JSON.stringify({
+          type:'REQUEST',
+          address:a[0]
+        }))
+      })
     } else console.log("no websocket connection")
   },
 
   sendMessage(state, ws, m) {
     console.log("MESSAGE",m)
     if(ws && ws.readyState > 0){
-      const message = iota.utils.toTrytes(m.text)
-      const transfers = [{
-        value: 1,
-        address: state.payoutAddress || server_addy,
-        message: message
-      }]
-      iota.api.prepareTransfers(SEED, transfers, (e, r) => {
-        if (e !== null) console.error(e)
-        ws.send(JSON.stringify({
-          type:'MESSAGE',
-          text: m.text,
-          payload:r
-        }))
-        return { ...state, messages: [m, ...state.messages]}
-      })
+      // const message = iota.utils.toTrytes(m.text)
+      // const transfers = [{
+      //   value: 1,
+      //   address: state.payoutAddress || server_addy,
+      //   message: message
+      // }]
+      // iota.api.prepareTransfers(SEED, transfers, (e, r) => {
+      //   if (e !== null) console.error(e)
+      //   ws.send(JSON.stringify({
+      //     type:'MESSAGE',
+      //     message: m.text,
+      //     payload:r
+      //   }))
+      //   return { ...state, messages: [m, ...state.messages]}
+      // })
+      ws.send(JSON.stringify({
+        type:'MESSAGE',
+        text: m.text,
+      }))
     } else console.log("no websocket connection")
   },
 
@@ -129,9 +135,12 @@ let actions = store => ({
     console.log('message received', m)
     if(m.type==='MESSAGE'){
       return { ...state, messages: [m, ...state.messages]}
-    } else if(type==='ADDRESS'){
+    } else if(m.type==='ADDRESS'){
       return { ...state, payoutAddress: m.address}
-    }  
+    } else if(m.type==='TIMEOUT'){
+      alert("TIMES UP!!!")
+      return { ...state, messages:[], timeout:true}
+    }
   },
 
   clearMessages(state) {
@@ -146,9 +155,11 @@ class App extends Component {
     super()
     this.ws = new ReconnectingWebSocket(WSURL)
     // ws.refresh() to try again on a "connect" button?
-    this.ws.onmessage = function(e){
+    console.log(this.ws)
+    this.ws.onmessage = (e) => {
       let d = null
       try{d=JSON.parse(e.data)}catch(e){}
+      console.log(this.props)
       if(d) this.props.receiveMessage(d)
     }
     this.ws.onopen = function(e) {
@@ -168,13 +179,19 @@ class App extends Component {
   // }
 
   render() {
-    const {messages, payoutAddress, sendMessage, clearMessages, connect} = this.props
-    if(!payoutAddress){
+    const {messages, sendMessage, clearMessages, connect, timeout} = this.props
+    const {payoutAddress} = this.state
+    console.log(this.props)
+    if(!payoutAddress || timeout){
       return (
         h('main', {id:'app'},
           h('button', {
             className:'connect-button',
-            onClick: () => connect() 
+            onClick: () => {
+              connect(this.ws)
+              this.setState({payoutAddress:'GREKRLDLCIPAOVKGZYJCLEXMEMND9DLLWEPZBKBHVKVAQVOCFEGRDSTNGIKUPSIWEVGSXEOIHGKQWX9DDESIDNQLR9'})
+              console.log("SETTING PAYOT ADDRESS")
+            }
           }, 'Connect')
         )
       )
@@ -259,7 +276,7 @@ class TextInput extends Component {
 }
 
 // connect actions and store to App
-const Index = unistore.connect('messages,payoutAddress', actions)(
+const Index = unistore.connect('messages,timeout', actions)(
   (props) => (
     h(App, props)
   )
