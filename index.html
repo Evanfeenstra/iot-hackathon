@@ -87,7 +87,7 @@ var store = unistore({
   id: 0,
   messages: [] 
 })
-unissist(store, unissist.localStorageAdapter());
+//unissist(store, unissist.localStorageAdapter());
 
 // web crypto api?
 
@@ -103,7 +103,10 @@ let actions = store => ({
           address:a[0]
         }))
       })
+
     } else console.log("no websocket connection")
+
+    return { ...state, messages:[], timeout:false}
   },
 
   sendMessage(state, ws, m) {
